@@ -1,0 +1,143 @@
+listd64.doc
+
+Written by Martin Sigley, GroundhoGrafix 3/28/2026.
+
+Documentation for the listd64 utility. Compiled with tcc (Tiny C Compiler), it also
+compiles with gcc but the executable is considerably larger.
+
+HOW TO USE THE UTILITY:
+This is a .D64 disk image directory listing program. You can use it on the command 
+line like this:
+
+listd64 mydisk.d64
+
+It accepts multiple files at once or a single file. Wildcard input is not supported
+from the console, however under windows GUI you can select as many D64 images as you 
+like and drop them on to listd64.exe and it will extract all of the directories in to
+the dir.lst file as well as print them to the screen. If you drag and drop from a
+different folder than where listd64 is then look for the dir.lst file in the folder
+where your D64 images came from.
+
+HOW TO USE THE CODE:
+
+To use in your own C programs:
+
+byte is a new data type. It is the same as unsigned char.
+
+You have to include the header file:
+#include "listd64.h"
+
+
+Your first function call should be d64Init():
+
+d64Init();
+
+
+Then declare a D64Image* variable:
+
+D64Image* d.
+
+
+Load the D64 image: 
+
+d = d64LoadImage("mydisk.d64").
+
+
+You can then access any track or block on the disk image using the function d64tba()
+like this, which stands for D64 Track, Block to Address:
+
+unsigned address;
+address = d64tba(18,1). 
+
+You can then read from the loaded image file like this:
+
+*(d->image + d64tba(18,1))
+
+Here is an example of printing an entire block/sector to the screen:
+
+for(byt=0; byt<256; byt++)
+	printf("%2d ", *(d->image + d64tba(18,0) + byt));
+	
+d64tba() is used just to locate the beginning of a specific track and block, you will
+have to add an additional offset between 0 - 255 to actually read through that block.
+Remember the first 2 bytes of every block are the track and sector of the next block
+in the chain. If the track (1st byte) is 0 then then this is the last block in the
+chain and the block (2nd byte) tells you how many bytes are used inside this last
+block.
+	
+When finished with the disk image it is a good practice to deallocate the memory
+used for it by calling:
+
+d64UnloadImage(d);
+
+
+EXTRAS:
+There is a 256 byte array in the listd64.h file called pc2asc[]. pc2asc means Power C
+to ASCII. You can use this to convert PETSCII to ASCII like this:
+
+char c;
+
+for(byt=0; byt<256; byt++)
+{
+	c = pc2asc[*(d->image + d64tba(18,0) + byt)];
+	putchar(c);
+}
+
+This example is the just of it but is pretty worthless in it's current form. Likely
+you will hunt down a track and block on the disk using d64tba() and locate a PETSCII
+string that you'll want to use pc2asc[] on to convert that string to a modern ASCII
+string.
+
+Use D64Header to place a structure overlay on top of the header block. First make a
+pointer like so:
+
+D64Header *h;
+D64Image* d;
+
+Then assign the header pointer to the block like this:
+
+h = (D64header*) (d->image + d64tba(18,0));
+
+you can then read the different parts of the header using the struct members. Refer
+to the listd64.h file for all of the members. If unsure of the what the member
+represents refer online or in your 1541 User's Manual near the end of the manual for
+a break down of each section.
+
+you can now get a piece of header data like this:
+
+byte b = h->dosVersion;
+
+For file entries you can do the same as we did with the D64Header except you'll
+use d64tba(18,1) and point the D64FileEntry pointer there. There will be 8 file
+entries per block so you can reference them like this after you assign the pointer.
+
+D64FileEntry *fe = (D64FileEntry*) (d->image + d64tba(18,1));
+
+byte nextTrack = fe[0].track;
+byte nextBlock = fe[0].block;
+
+Here we find the first character of the file name for the 3rd file in the block:
+
+putchar(fe[2].fileName[0]);
+
+Even better yet we could have done this:
+
+putchar(pc2asc[fe[2].fileName[0]]);
+
+That would not only get the first letter of the filename but would also convert it
+from PETSCII to ASCII and print it.
+
+Essentially, d64LoadImage() and d64tba() will give you access to all data on a D64
+image. You can read all of the data on the image. If you wanted to change the data
+all you would have to do is create a function to resave the image to disk like this.
+
+D64Image* d;
+File *fptr;
+
+d = d64LoadImage("original.d64");
+fptr = fopen("newdisk.d64", "w");
+fwrite(d->image, sizeof(byte), d->size, fptr);
+
+Now your changes are saved to "newdisk.d64".
+
+Hope this document helps get you started. Happy Commodoring!
